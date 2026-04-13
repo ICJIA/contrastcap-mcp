@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [0.1.2] — 2026-04-13
 
+Skipped — superseded by 0.1.3 before publish (`publish.sh` auto-bumped
+after the pre-bump to 0.1.2).
+
+## [0.1.3] — 2026-04-13
+
 ### Fixed
 - `get_status` now reports accurate `axe-core` and `playwright` versions regardless of install layout (flat npm, pnpm, npx cache). Previously reported `vunknown` when installed via `npx`. Uses `createRequire` + `require.resolve` to locate each dependency's `package.json` through Node's module resolver rather than a hardcoded relative path.
 
