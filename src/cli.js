@@ -3,6 +3,7 @@
 import { program } from 'commander';
 import { readFileSync } from 'fs';
 import { execFile } from 'child_process';
+import { createRequire } from 'module';
 import { setVerbosity, CONFIG } from './config.js';
 import { closeBrowser } from './browser.js';
 import { checkPageContrast } from './tools/checkPageContrast.js';
@@ -10,7 +11,16 @@ import { checkElementContrast } from './tools/checkElementContrast.js';
 import { getContrastSummary } from './tools/getContrastSummary.js';
 import { sanitizeError } from './utils/sanitizeError.js';
 
+const require = createRequire(import.meta.url);
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
+
+function readPkgVersion(specifier) {
+  try {
+    return JSON.parse(readFileSync(require.resolve(`${specifier}/package.json`), 'utf8')).version;
+  } catch {
+    return 'unknown';
+  }
+}
 
 program
   .name('contrastcap')
@@ -74,14 +84,8 @@ program
   .command('status')
   .description('Show version info')
   .action(async () => {
-    let axeVersion = 'unknown';
-    let playwrightVersion = 'unknown';
-    try {
-      axeVersion = JSON.parse(readFileSync(new URL('../node_modules/axe-core/package.json', import.meta.url))).version;
-    } catch { /* ignore */ }
-    try {
-      playwrightVersion = JSON.parse(readFileSync(new URL('../node_modules/playwright/package.json', import.meta.url))).version;
-    } catch { /* ignore */ }
+    const axeVersion = readPkgVersion('axe-core');
+    const playwrightVersion = readPkgVersion('playwright');
 
     let latest = 'unknown';
     try {

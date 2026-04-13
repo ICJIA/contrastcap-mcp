@@ -2,8 +2,19 @@
 
 import { readFileSync } from 'fs';
 import { execFile } from 'child_process';
+import { createRequire } from 'module';
 import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
+
+const require = createRequire(import.meta.url);
+
+function readPkgVersion(specifier) {
+  try {
+    return JSON.parse(readFileSync(require.resolve(`${specifier}/package.json`), 'utf8')).version;
+  } catch {
+    return 'unknown';
+  }
+}
 
 import { CONFIG, log, setVerbosity } from './config.js';
 import { closeBrowser } from './browser.js';
@@ -20,14 +31,8 @@ if (process.argv.includes('--quiet')) setVerbosity('quiet');
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
 const serverVersion = pkg.version;
 
-let axeVersion = 'unknown';
-let playwrightVersion = 'unknown';
-try {
-  axeVersion = JSON.parse(readFileSync(new URL('../node_modules/axe-core/package.json', import.meta.url))).version;
-} catch { /* ignore */ }
-try {
-  playwrightVersion = JSON.parse(readFileSync(new URL('../node_modules/playwright/package.json', import.meta.url))).version;
-} catch { /* ignore */ }
+const axeVersion = readPkgVersion('axe-core');
+const playwrightVersion = readPkgVersion('playwright');
 
 let _latestVersion = null;
 const _latestPromise = new Promise((resolve) => {
