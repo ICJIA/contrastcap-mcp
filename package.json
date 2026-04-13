@@ -1,6 +1,6 @@
 {
   "name": "@icjia/contrastcap",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "MCP server for automated WCAG contrast auditing via pixel-level analysis — resolves axe-core 'needs review' items by sampling actual rendered pixels in headless Chromium",
   "type": "module",
   "main": "src/server.js",
