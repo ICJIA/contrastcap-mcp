@@ -26,6 +26,12 @@ export async function getBrowser() {
     return b;
   }).catch((err) => {
     _launching = null;
+    if (/Executable doesn't exist|browserType\.launch/i.test(err.message || '')) {
+      throw new Error(
+        "Chromium is not installed. Run `npx playwright install chromium` " +
+        "to download it (~200 MB), or set PLAYWRIGHT_DOWNLOAD_HOST to a mirror."
+      );
+    }
     throw err;
   });
 

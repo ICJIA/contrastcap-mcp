@@ -35,22 +35,21 @@ export const CONFIG = {
 
   USER_AGENT: 'contrastcap-mcp/0.1 (WCAG contrast auditor)',
 
-  // SSRF denylist — mirrors lightcap.
+  // SSRF policy.
+  // Always-blocked hostnames (cloud metadata + 0.0.0.0 sentinel).
   BLOCKED_HOSTNAMES: [
     '169.254.169.254',
     'metadata.google.internal',
     'metadata.azure.com',
     '0.0.0.0',
   ],
-  BLOCKED_IP_PREFIXES: [
-    '169.254.',                // IPv4 link-local (AWS IMDS)
-    'fd00:',                   // IPv6 unique-local
-    'fe80:',                   // IPv6 link-local
-    '::',                      // IPv6 unspecified/loopback-equivalent
-  ],
-  LOCALHOST_HOSTS: [
-    'localhost', '127.0.0.1', '::1', '[::1]',
-  ],
+  // Network-class blocking is handled by CIDR classification in
+  // src/utils/urlValidate.js — link-local (incl. cloud metadata),
+  // unspecified, multicast, and reserved ranges are *always* blocked.
+  // Private/loopback/CGNAT are allowed by default so the dev-server
+  // workflow keeps working, and blocked when this flag is on.
+  // Read at call time so the env flag can be flipped per-process.
+  get BLOCK_PRIVATE_IPS() { return process.env.CONTRASTCAP_BLOCK_PRIVATE === '1'; },
 };
 
 // ─── Logging ──────────────────────────────────────────────────────

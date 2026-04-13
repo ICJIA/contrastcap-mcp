@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { validateUrl } from '../utils/urlValidate.js';
+import { validateSelector } from '../utils/selectorValidate.js';
 import { withPage } from '../browser.js';
 import { sampleBackgroundColor } from '../engine/pixelSampler.js';
 import {
@@ -20,10 +21,7 @@ function rgbStringToHex(rgbStr) {
 
 export async function checkElementContrast(params) {
   const level = params.level || CONFIG.DEFAULT_LEVEL;
-  const selector = params.selector;
-  if (typeof selector !== 'string' || selector.length === 0 || selector.length > CONFIG.SELECTOR_MAX_LEN) {
-    throw new Error('Invalid selector');
-  }
+  const selector = validateSelector(params.selector);
 
   const validated = await validateUrl(params.url);
 

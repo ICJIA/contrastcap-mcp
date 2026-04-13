@@ -199,6 +199,9 @@ Server + axe-core + Playwright versions, plus a non-blocking npm update check.
 | `CONTRASTCAP_MAX_CONCURRENT` | `2` | Max concurrent audits per process |
 | `CONTRASTCAP_VIEWPORT_WIDTH` | `1280` | Chromium viewport width |
 | `CONTRASTCAP_VIEWPORT_HEIGHT` | `800` | Chromium viewport height |
+| `CONTRASTCAP_BLOCK_PRIVATE` | unset | Set to `1` to block RFC1918 / loopback / CGNAT addresses (production hardening). See **Security**. |
+| `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` | unset | Set to `1` to skip the Chromium download in `postinstall` (offline / air-gapped installs). |
+| `PLAYWRIGHT_DOWNLOAD_HOST` | unset | Mirror host for Playwright's Chromium download. |
 
 ---
 
@@ -234,14 +237,25 @@ First-time publish is auto-detected (no existing version on npm) — the current
 
 ## Security
 
-- Scheme allowlist: `http:` and `https:` only. `file:`, `javascript:`, `data:`, `ftp:` etc. are rejected with a generic `Blocked URL scheme` error.
-- Cloud-metadata hostnames blocked: `169.254.169.254`, `metadata.google.internal`, `metadata.azure.com`, `0.0.0.0`.
-- IP-prefix denylist (DNS-resolved): IPv4 link-local (`169.254.`), IPv6 unique-local (`fd00:`), link-local (`fe80:`), unspecified (`::`). DNS-resolution failures fail closed.
-- Post-navigation re-check: after `page.goto` settles, `page.url()` is re-validated before any pixel sampling.
-- Generic error messages — no filesystem paths or stack traces are returned to MCP clients.
-- No file writes. Screenshots are in-memory buffers consumed by `sharp` and discarded.
+### Threat model
 
-Private / localhost IPs are **allowed** by design — the primary use case is auditing dev servers.
+`contrastcap` is an MCP server invoked by an LLM that may be acting on prompt-injected, attacker-controlled content. The dangerous tools are `check_page_contrast` and `check_element_contrast` — both accept a URL and load it in headless Chromium. A malicious URL could attempt to pivot to internal network resources (SSRF), exfiltrate page content via element text, or load adversarial schemes (`file:`, `javascript:`, `data:`).
+
+### Controls
+
+- **Scheme allowlist**: `http:` and `https:` only. `file:`, `javascript:`, `data:`, `ftp:`, etc. are rejected with a generic `Blocked URL scheme` error.
+- **Cloud-metadata blocklist** (always on): `169.254.169.254`, `metadata.google.internal`, `metadata.azure.com`, `0.0.0.0`.
+- **CIDR-classified IP blocking** (always on): IPv4 link-local (`169.254.0.0/16`), IPv6 link-local (`fe80::/10`), IPv6 unspecified (`::`), IPv4 multicast/reserved (`224.0.0.0/4`+), IPv6 multicast (`ff00::/8`). IPv4-mapped IPv6 addresses are unwrapped first so `::ffff:169.254.169.254` is recognized as link-local. DNS-resolution failures fail closed.
+- **Optional private-IP blocking**: set `CONTRASTCAP_BLOCK_PRIVATE=1` to also block RFC1918 (`10/8`, `172.16/12`, `192.168/16`), CGNAT (`100.64/10`), loopback (`127/8`, `::1`), and IPv6 ULA (`fc00::/7`). Off by default — the primary use case is auditing dev servers — but **strongly recommended** when running the server in a trusted internal network where the LLM should not be able to pivot to internal services via prompt injection.
+- **Post-navigation re-check**: after `page.goto` settles, `page.url()` is re-validated against the same SSRF policy. This catches `http://attacker.com/redirect` → `http://10.0.0.5/admin`.
+- **Selector hardening**: `check_element_contrast` rejects Playwright engine prefixes (`xpath=`, `text=`, `role=`, `internal:*`, `_react=`, `_vue=`, etc.) and chain operators (`>>`). Only plain CSS selectors are accepted, so a malicious selector cannot pivot to XPath / text-content matching to read arbitrary DOM text.
+- **Generic error messages** — no filesystem paths or stack traces are returned to MCP clients.
+- **No file writes.** Screenshots are in-memory buffers consumed by `sharp` and discarded.
+- **Hardened postinstall**: Playwright's CLI is resolved through Node's module resolver (`require.resolve`) rather than `$PATH`, so a shadowed `playwright` binary cannot hijack the install. Chromium download can be skipped (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`) or mirrored (`PLAYWRIGHT_DOWNLOAD_HOST`). If Chromium is missing at runtime, the launcher emits an actionable error rather than a Playwright-internal stack trace.
+
+### Audit history
+
+A red/blue team audit covering the MCP tool surface, Playwright/browser launch, dependency posture, and publish pipeline was performed in 0.1.4 (see CHANGELOG). `pnpm audit` is clean (0 vulnerabilities across all dependencies).
 
 ---
 

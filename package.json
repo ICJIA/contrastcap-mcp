@@ -10,10 +10,11 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test test/*.test.js",
-    "postinstall": "node -e \"try { require('child_process').execSync('playwright install chromium', { stdio: 'inherit' }) } catch (e) { console.error('[contrastcap] playwright install chromium failed:', e.message); process.exit(0) }\""
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "files": [
     "src/",
+    "scripts/postinstall.mjs",
     "README.md"
   ],
   "engines": {
