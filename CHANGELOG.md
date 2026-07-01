@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.5] — 2026-07-01
+
+### Fixed
+- **Server failed to start under `npx` (MCP SDK prerelease drift).** `npx -y @icjia/contrastcap` crashed on startup with `SyntaxError: The requested module '@modelcontextprotocol/server' does not provide an export named 'StdioServerTransport'`, surfacing in Claude Code as `Failed to reconnect to contrastcap: -32000`. The dependency was pinned with a caret on a **prerelease** (`"@modelcontextprotocol/server": "^2.0.0-alpha.2"`) and the published tarball ships no lockfile, so every fresh `npx` install re-resolved that range to the newest matching prerelease. `2.0.0-alpha.3` moved `StdioServerTransport` from the package root to the `@modelcontextprotocol/server/stdio` subpath, so `src/server.js`'s root import stopped resolving. **Fix:** pin the SDK to exactly `2.0.0-alpha.2` (never range a prerelease). Existing npx installs must clear the cache to pick this up: `rm -rf ~/.npm/_npx`.
+
 ## [0.1.4] — 2026-04-13
 
 Security audit (red/blue team) and hardening pass. No exploitable issues
