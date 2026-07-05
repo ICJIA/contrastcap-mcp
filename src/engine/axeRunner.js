@@ -13,14 +13,14 @@ const AXE_SOURCE = axeCore.source;
  * node via pixel sampling.
  */
 export async function runContrastAudit(page) {
-  await page.evaluate((source) => {
-    // Guard against double-injection on re-runs
-    if (!window.axe) {
-      const s = document.createElement('script');
-      s.textContent = source;
-      document.head.appendChild(s);
-    }
-  }, AXE_SOURCE);
+  // Inject via CDP evaluate, not a DOM <script> tag: inline script elements
+  // are subject to the page's CSP (a script-src without 'unsafe-inline'
+  // blocks them and axe never loads), while Runtime.evaluate is exempt.
+  // Guard against double-injection on re-runs.
+  const hasAxe = await page.evaluate(() => !!window.axe);
+  if (!hasAxe) {
+    await page.evaluate(AXE_SOURCE);
+  }
 
   const results = await page.evaluate(async () => {
     return await window.axe.run(document, {
