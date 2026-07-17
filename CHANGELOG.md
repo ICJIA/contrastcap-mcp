@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.6] — 2026-07-17
+
+### Fixed
+- **Audits crashed on any page with a definite axe violation.** axe-core
+  reports violation colors as hex strings (`Color.toHexString()` →
+  `"#999999"`), but the failure formatter parsed them with the `rgb()`-only
+  parser, which throws `Invalid rgb string` — and the violations loop had no
+  error isolation, so a single definite violation aborted the whole audit
+  with `Audit failed`. Since most real pages have at least one definite
+  contrast violation, `check_page_contrast` and `get_contrast_summary`
+  failed on most real-world input. The pixel-sampling path for
+  "needs review" nodes reads colors from `getComputedStyle` (`rgb()` form)
+  and was unaffected — which is why gradient-focused testing missed it.
+  **Fix:** new `cssColorToHex()` accepts both hex and `rgb()`/`rgba()`
+  forms at every point colors enter the pipeline, and a malformed violation
+  node now counts as `skipped` instead of killing the audit.
+- **CSP-hardened pages.** axe-core is injected via CDP `Runtime.evaluate`
+  instead of a DOM `<script>` tag, so a page CSP (`script-src` without
+  `unsafe-inline`) can no longer block the audit. (Committed after 0.1.5;
+  first shipped in this release.)
+
+### Tests
+- New Chromium-backed e2e regression test (`test/auditPage.e2e.test.js`):
+  serves a fixture with a definite violation + a gradient "needs review"
+  element and asserts the audit completes and reports both. 95 tests, all
+  passing.
+
 ## [0.1.5] — 2026-07-01
 
 ### Fixed

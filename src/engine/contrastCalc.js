@@ -61,3 +61,14 @@ export function rgbToHex(r, g, b) {
   const h = v => clamp(v).toString(16).padStart(2, '0');
   return `#${h(r)}${h(g)}${h(b)}`;
 }
+
+// Normalize a CSS color to "#rrggbb". Accepts hex (axe-core reports violation
+// colors via Color.toHexString()) and rgb()/rgba() (getComputedStyle).
+export function cssColorToHex(str) {
+  if (typeof str === 'string' && str.trim().startsWith('#')) {
+    const { r, g, b } = parseHex(str);
+    return rgbToHex(r, g, b);
+  }
+  const { r, g, b } = parseRgbString(str);
+  return rgbToHex(r, g, b);
+}

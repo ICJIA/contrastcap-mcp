@@ -6,18 +6,12 @@ import { sampleBackgroundColor } from '../engine/pixelSampler.js';
 import {
   contrastRatio,
   requiredRatio,
-  parseRgbString,
-  rgbToHex,
+  cssColorToHex,
 } from '../engine/contrastCalc.js';
 import { suggestFix } from '../engine/colorSuggest.js';
 import { isLargeText } from '../utils/largeText.js';
 import { formatElementResult } from '../utils/formatResults.js';
 import { withAuditTimeout } from './auditPage.js';
-
-function rgbStringToHex(rgbStr) {
-  const { r, g, b } = parseRgbString(rgbStr);
-  return rgbToHex(r, g, b);
-}
 
 export async function checkElementContrast(params) {
   const level = params.level || CONFIG.DEFAULT_LEVEL;
@@ -63,7 +57,7 @@ export async function checkElementContrast(params) {
       const large = isLargeText(fgPx, meta.fontWeight);
       const required = requiredRatio(large, level);
 
-      const fgHex = rgbStringToHex(meta.color);
+      const fgHex = cssColorToHex(meta.color);
       const bg = await sampleBackgroundColor(page, element, box, meta.color);
       const ratio = contrastRatio(fgHex, bg.hex);
       const pass = ratio >= required;

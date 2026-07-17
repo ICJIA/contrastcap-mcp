@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import * as contrastCalc from '../src/engine/contrastCalc.js';
 import {
   relativeLuminance,
   contrastRatio,
@@ -92,6 +93,27 @@ describe('parseRgbString', () => {
   });
   it('rejects nonsense', () => {
     assert.throws(() => parseRgbString('blue'));
+  });
+});
+
+describe('cssColorToHex', () => {
+  // axe-core reports violation colors as hex (Color.toHexString()), while
+  // getComputedStyle yields rgb()/rgba() — both formats must be accepted.
+  it('accepts 6-digit hex as reported by axe', () => {
+    assert.equal(contrastCalc.cssColorToHex('#999999'), '#999999');
+  });
+  it('normalizes uppercase and 3-digit hex', () => {
+    assert.equal(contrastCalc.cssColorToHex('#ABC'), '#aabbcc');
+  });
+  it('accepts rgb() as reported by getComputedStyle', () => {
+    assert.equal(contrastCalc.cssColorToHex('rgb(153, 153, 153)'), '#999999');
+  });
+  it('accepts rgba()', () => {
+    assert.equal(contrastCalc.cssColorToHex('rgba(255, 0, 128, 0.5)'), '#ff0080');
+  });
+  it('rejects nonsense', () => {
+    assert.throws(() => contrastCalc.cssColorToHex('blue'));
+    assert.throws(() => contrastCalc.cssColorToHex(null));
   });
 });
 

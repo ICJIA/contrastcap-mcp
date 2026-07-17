@@ -6,16 +6,10 @@ import { sampleBackgroundColor } from '../engine/pixelSampler.js';
 import {
   contrastRatio,
   requiredRatio,
-  parseRgbString,
-  rgbToHex,
+  cssColorToHex,
 } from '../engine/contrastCalc.js';
 import { suggestFix } from '../engine/colorSuggest.js';
 import { isLargeText } from '../utils/largeText.js';
-
-function rgbStringToHex(rgbStr) {
-  const { r, g, b } = parseRgbString(rgbStr);
-  return rgbToHex(r, g, b);
-}
 
 function withinMarginalDelta(ratio, required) {
   return ratio < required + CONFIG.MARGINAL_DELTA && ratio >= required;
@@ -61,7 +55,7 @@ async function resolveIncomplete(page, node, level) {
     const large = isLargeText(fgPx, meta.fontWeight);
     const required = requiredRatio(large, level);
 
-    const fgHex = rgbStringToHex(meta.color);
+    const fgHex = cssColorToHex(meta.color);
 
     const bg = await sampleBackgroundColor(page, element, box, meta.color);
     const ratio = contrastRatio(fgHex, bg.hex);
@@ -108,8 +102,8 @@ function buildFailureFromViolation(node, level) {
   const colors = axeColors(node);
   if (!colors || !colors.fgColor || !colors.bgColor) return null;
 
-  const fgHex = rgbStringToHex(colors.fgColor);
-  const bgHex = rgbStringToHex(colors.bgColor);
+  const fgHex = cssColorToHex(colors.fgColor);
+  const bgHex = cssColorToHex(colors.bgColor);
 
   const fgPx = parseFloat(colors.fontSize || '16');
   const fontWeight = colors.fontWeight || '400';
@@ -166,9 +160,18 @@ export async function auditPage(url, level) {
     const { violations, incomplete, passes } = await runContrastAudit(page);
 
     // Fill in text snippets for violations so failure entries are readable.
+    // A single malformed node must not kill the audit — count it as skipped.
     const failures = [];
+    let skippedCount = 0;
     for (const node of violations) {
-      const entry = buildFailureFromViolation(node, level);
+      let entry;
+      try {
+        entry = buildFailureFromViolation(node, level);
+      } catch (err) {
+        log('debug', `violation node skipped: ${err.message}`);
+        skippedCount++;
+        continue;
+      }
       if (!entry) continue;
       try {
         const el = await page.$(entry.selector);
@@ -183,7 +186,6 @@ export async function auditPage(url, level) {
 
     const warnings = [];
     let resolvedPassCount = 0;
-    let skippedCount = 0;
     let processed = 0;
 
     for (const node of incomplete) {
