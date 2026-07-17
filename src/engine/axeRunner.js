@@ -3,7 +3,10 @@ import axeCore from 'axe-core';
 const AXE_SOURCE = axeCore.source;
 
 /**
- * Inject axe-core into the page and run the color-contrast rule only.
+ * Inject axe-core into the page and run the contrast rule for the requested
+ * WCAG level: `color-contrast` (AA, 1.4.3) or `color-contrast-enhanced`
+ * (AAA, 1.4.6). The AAA rule is disabled by default in axe, but selecting it
+ * via runOnly-by-rule-id bypasses the enabled flag (ruleShouldRun).
  *
  * Returns flattened arrays of nodes (not rules) for violations / incomplete / passes.
  * Each node retains its original axe shape: { target, html, any, all, none, ... }.
@@ -12,7 +15,7 @@ const AXE_SOURCE = axeCore.source;
  * and `passes` (definite passes). Our job is to re-resolve every `incomplete`
  * node via pixel sampling.
  */
-export async function runContrastAudit(page) {
+export async function runContrastAudit(page, level = 'AA') {
   // Inject via CDP evaluate, not a DOM <script> tag: inline script elements
   // are subject to the page's CSP (a script-src without 'unsafe-inline'
   // blocks them and axe never loads), while Runtime.evaluate is exempt.
@@ -22,12 +25,13 @@ export async function runContrastAudit(page) {
     await page.evaluate(AXE_SOURCE);
   }
 
-  const results = await page.evaluate(async () => {
+  const rule = level === 'AAA' ? 'color-contrast-enhanced' : 'color-contrast';
+  const results = await page.evaluate(async (ruleId) => {
     return await window.axe.run(document, {
-      runOnly: { type: 'rule', values: ['color-contrast'] },
+      runOnly: { type: 'rule', values: [ruleId] },
       resultTypes: ['violations', 'incomplete', 'passes'],
     });
-  });
+  }, rule);
 
   const nodesOf = (arr) => (arr || []).flatMap(rule => rule.nodes || []);
 

@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **AAA audits under-reported.** axe was always run with the `color-contrast`
+  rule, which checks WCAG AA (1.4.3) thresholds only — elements passing AA
+  but failing AAA (e.g. `#767676` on white, 4.54:1 against a 7:1 bar) were
+  trusted as passes. `level: "AAA"` now runs axe's `color-contrast-enhanced`
+  rule (1.4.6). Relatedly, the enhanced rule files elements whose background
+  it cannot determine under `passes` with `contrastRatio: null` (the AA rule
+  marks the same elements `incomplete`); ratio-less passes are no longer
+  trusted and go through pixel resolution like any needs-review node.
+- **CLI lingered up to 120 s after printing results.** The audit-timeout and
+  per-element timers raced via `Promise.race` were never cleared, pinning the
+  event loop until they fired. New `raceWithTimeout()` clears the timer as
+  soon as either side settles; the process now exits as soon as output is
+  flushed.
+
+### Tests
+- e2e now covers AAA: the 4.54:1 element must fail at 7:1 and the gradient
+  element must be pixel-resolved to a failure at AAA.
+- New process-level regression test asserts a child that awaits
+  `withAuditTimeout(Promise.resolve())` exits on its own. 98 tests, all
+  passing.
+
 ## [0.1.6] — 2026-07-17
 
 ### Fixed

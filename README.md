@@ -153,8 +153,8 @@ Server + axe-core + Playwright versions, plus a non-blocking npm update check.
 
 1. Playwright navigates to the URL (30s timeout, `networkidle` fallback to `load`).
 2. The server re-validates `page.url()` against the SSRF denylist (redirect guard).
-3. axe-core is injected via `page.evaluate` and run with `color-contrast` only. Its `violations` (definite failures) and `passes` (definite passes) are trusted as-is.
-4. For every `incomplete` (needs-review) node:
+3. axe-core is injected via CDP `Runtime.evaluate` (exempt from page CSP) and run with the level-appropriate rule: `color-contrast` (AA, 1.4.3) or `color-contrast-enhanced` (AAA, 1.4.6). Its `violations` (definite failures) and ratio-carrying `passes` are trusted as-is. Passes **without** a computed ratio are not trusted — the enhanced rule files indeterminate backgrounds there instead of under `incomplete` — and are re-resolved like needs-review nodes.
+4. For every `incomplete` (needs-review) node — plus any ratio-less pass:
    - Scroll into view
    - Read computed `color`, `fontSize` (always resolved to px), `fontWeight`
    - Save the element's prior inline `color`, set it to `transparent`, screenshot the bounding box, then restore

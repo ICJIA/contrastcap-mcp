@@ -10,6 +10,7 @@ import {
 } from '../engine/contrastCalc.js';
 import { suggestFix } from '../engine/colorSuggest.js';
 import { isLargeText } from '../utils/largeText.js';
+import { raceWithTimeout } from '../utils/raceWithTimeout.js';
 
 function withinMarginalDelta(ratio, required) {
   return ratio < required + CONFIG.MARGINAL_DELTA && ratio >= required;
@@ -157,7 +158,18 @@ export async function auditPage(url, level) {
     // Post-redirect SSRF guard.
     await validateUrl(page.url());
 
-    const { violations, incomplete, passes } = await runContrastAudit(page);
+    const { violations, incomplete, passes } = await runContrastAudit(page, level);
+
+    // Only trust an axe "pass" that carries a computed ratio. The enhanced
+    // (AAA) rule files elements whose background it cannot determine under
+    // `passes` with contrastRatio: null — the AA rule marks the same
+    // elements `incomplete` — so ratio-less passes go through pixel
+    // resolution like any other needs-review node.
+    const indeterminate = passes.filter(
+      (n) => typeof axeColors(n)?.contrastRatio !== 'number'
+    );
+    const axePassCount = passes.length - indeterminate.length;
+    const needsResolution = [...incomplete, ...indeterminate];
 
     // Fill in text snippets for violations so failure entries are readable.
     // A single malformed node must not kill the audit — count it as skipped.
@@ -188,7 +200,7 @@ export async function auditPage(url, level) {
     let resolvedPassCount = 0;
     let processed = 0;
 
-    for (const node of incomplete) {
+    for (const node of needsResolution) {
       if (processed >= CONFIG.MAX_ELEMENTS) {
         skippedCount++;
         continue;
@@ -197,13 +209,11 @@ export async function auditPage(url, level) {
 
       let result;
       try {
-        result = await Promise.race([
+        result = await raceWithTimeout(
           resolveIncomplete(page, node, level),
-          new Promise((_, rej) => setTimeout(
-            () => rej(new Error('element timeout')),
-            CONFIG.ELEMENT_TIMEOUT,
-          )),
-        ]);
+          CONFIG.ELEMENT_TIMEOUT,
+          'element timeout',
+        );
       } catch (err) {
         log('debug', `element timeout/error: ${err.message}`);
         skippedCount++;
@@ -218,7 +228,7 @@ export async function auditPage(url, level) {
 
     return {
       finalUrl: page.url(),
-      axePassCount: passes.length,
+      axePassCount,
       resolvedPassCount,
       failures,
       warnings,
@@ -230,11 +240,5 @@ export async function auditPage(url, level) {
 // ─── Audit timeout wrapper ────────────────────────────────────────
 
 export function withAuditTimeout(promise, label = 'Audit') {
-  return Promise.race([
-    promise,
-    new Promise((_, rej) => setTimeout(
-      () => rej(new Error(`${label} timed out`)),
-      CONFIG.AUDIT_TIMEOUT,
-    )),
-  ]);
+  return raceWithTimeout(promise, CONFIG.AUDIT_TIMEOUT, `${label} timed out`);
 }
