@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.1.7] — 2026-07-17
 
 ### Fixed
 - **AAA audits under-reported.** axe was always run with the `color-contrast`
