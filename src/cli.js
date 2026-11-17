@@ -10,6 +10,7 @@ import { checkPageContrast } from './tools/checkPageContrast.js';
 import { checkElementContrast } from './tools/checkElementContrast.js';
 import { getContrastSummary } from './tools/getContrastSummary.js';
 import { sanitizeError } from './utils/sanitizeError.js';
+import { extractVerbosity, isServerInvocation } from './cli-args.js';
 
 const require = createRequire(import.meta.url);
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
@@ -22,20 +23,32 @@ function readPkgVersion(specifier) {
   }
 }
 
+const axeVersion = readPkgVersion('axe-core');
+
 program
   .name('contrastcap')
   .description('WCAG contrast auditor — pixel-level resolution of axe-core "needs review" items')
-  .version(pkg.version);
+  .version(`contrastcap v${pkg.version} (axe-core v${axeVersion})`, '-V, --version', 'Show contrastcap and axe-core versions')
+  .addHelpText('before', `contrastcap v${pkg.version} — axe-core v${axeVersion}\n`)
+  .addHelpText('after', `
+Examples:
+  contrastcap summary https://example.com              pass/fail/warning counts (cheapest)
+  contrastcap page http://localhost:3000               failures + warnings with hex fixes
+  contrastcap page http://localhost:3000 --level AAA   WCAG AAA (7:1 / 4.5:1)
+  contrastcap element http://localhost:3000 'nav a'    one element, after a fix
+  contrastcap status                                   versions + update check
 
-program
-  .option('--verbose', 'Verbose logging')
-  .option('--quiet', 'Errors only');
+Output is JSON, identical to the MCP tools. Exit code 1 on any error.
 
-function applyGlobalOptions() {
-  const opts = program.opts();
-  if (opts.verbose) setVerbosity('verbose');
-  if (opts.quiet) setVerbosity('quiet');
-}
+Global flags (any position):
+  --quiet     errors only on stderr (keeps output to the report itself)
+  --verbose   log browser lifecycle and sampling details
+
+Run 'contrastcap <command> --help' for a command's options.
+With no arguments and piped stdin (as MCP clients launch it), contrastcap runs as an MCP server.`);
+
+// --verbose / --quiet are handled before commander (see dispatch at the
+// bottom), so their position relative to a subcommand does not matter.
 
 function validLevel(v) {
   return v === 'AAA' ? 'AAA' : 'AA';
@@ -58,7 +71,6 @@ program
   .description('Summary counts only (lowest token cost)')
   .option('-l, --level <AA|AAA>', 'WCAG level', 'AA')
   .action(async (url, opts) => {
-    applyGlobalOptions();
     await runAndPrint(() => getContrastSummary({ url, level: validLevel(opts.level) }));
   });
 
@@ -67,7 +79,6 @@ program
   .description('Full page audit — failures and warnings with detail')
   .option('-l, --level <AA|AAA>', 'WCAG level', 'AA')
   .action(async (url, opts) => {
-    applyGlobalOptions();
     await runAndPrint(() => checkPageContrast({ url, level: validLevel(opts.level) }));
   });
 
@@ -76,7 +87,6 @@ program
   .description('Check a single element by CSS selector')
   .option('-l, --level <AA|AAA>', 'WCAG level', 'AA')
   .action(async (url, selector, opts) => {
-    applyGlobalOptions();
     await runAndPrint(() => checkElementContrast({ url, selector, level: validLevel(opts.level) }));
   });
 
@@ -84,7 +94,6 @@ program
   .command('status')
   .description('Show version info')
   .action(async () => {
-    const axeVersion = readPkgVersion('axe-core');
     const playwrightVersion = readPkgVersion('playwright');
 
     let latest = 'unknown';
@@ -113,17 +122,18 @@ program
     console.log(`  Default:    WCAG ${CONFIG.DEFAULT_LEVEL}`);
   });
 
-// Default: start the MCP server when invoked with no subcommand (the npx entry)
-const subcommands = ['summary', 'page', 'element', 'status', 'help'];
-const arg2 = process.argv[2];
-const isSubcommand = arg2 && (
-  subcommands.includes(arg2) ||
-  arg2 === '--help' || arg2 === '-h' ||
-  arg2 === '--version' || arg2 === '-V'
-);
+// Handle global flags first (position-independent), then dispatch: a bare
+// invocation with piped stdin (how MCP clients launch us) starts the MCP
+// server; a bare invocation at an interactive terminal prints help instead of
+// silently waiting for JSON-RPC; anything else goes to commander.
+const { verbosity, rest } = extractVerbosity(process.argv.slice(2));
+if (verbosity) setVerbosity(verbosity);
 
-if (!arg2 || (!isSubcommand && arg2.startsWith('-'))) {
+if (isServerInvocation(rest, Boolean(process.stdin.isTTY))) {
   await import('./server.js');
+} else if (rest.length === 0) {
+  // Bare `contrastcap` typed at a terminal: show help on stdout and exit 0.
+  program.help();
 } else {
-  program.parse();
+  program.parse(rest, { from: 'user' });
 }

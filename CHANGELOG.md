@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] — 2026-11-17
+
+### Added
+
+- **CLI parity with the MCP server**, so Claude can run contrast audits through Bash without the MCP server installed. `summary`, `page` and `element` return the same JSON as the corresponding MCP tools, and `status` matches `get_status`.
+- **`install-cli.sh`** (macOS + Linux): checks for Node 20+, installs dependencies with pnpm (npm fallback), downloads Chromium, adds a `contrastcap` alias to `~/.zshrc` (and `~/.bashrc` when present or bash is the login shell) inside a marked block that re-runs replace, symlinks `~/.local/bin/contrastcap` so non-interactive shells (including Claude Code's Bash tool) find it, and runs a test audit against a throwaway localhost page. `--uninstall` removes the alias and symlink.
+- **og:image** (`docs/og-image.png`, 1200×630, with its HTML source) at the top of the README, with npm / license / "MCP server + CLI" badges underneath.
+- README: "MCP or CLI?" (why the CLI exists, a feature-parity table, known differences), "How language models use the CLI", and hand setup for the alias in zsh and bash.
+- **`publish.sh` 2FA support:** `./publish.sh patch 123456` passes the code to npm and skips the confirmation prompt. A code that isn't 6–8 digits stops the script before anything changes, and a `CHANGELOG.md` entry for the new version is now required.
+
+### Fixed
+
+- **`contrastcap --verbose page <url>` (or `--quiet` before any command) started the MCP server instead of running the command.** Global flags are now handled in any position before dispatch. `contrastcap --verbose` / `--quiet` on their own still start the server, as MCP configs expect.
+- **`postinstall` never downloaded Chromium under pnpm.** Newer Playwright releases don't export `playwright/cli.js`, so the lookup threw `ERR_PACKAGE_PATH_NOT_EXPORTED`, and the `playwright-core` fallback isn't resolvable under pnpm. The script now finds each package's `package.json` (always exported) and runs the `cli.js` beside it.
+
+### Changed
+
+- Running bare `contrastcap` at an interactive terminal now prints help (exit 0) instead of silently starting the MCP server and waiting for input. MCP clients always pipe stdin, so they still get the server. The help header shows the contrastcap and axe-core versions and ends with examples and the global flags.
+- `contrastcap --version` / `-V` now prints both versions: `contrastcap v0.2.0 (axe-core v4.x.x)`.
+- `src/cli.js` is now marked executable in git, so the symlink runs directly.
+- The MCP server itself is unchanged. Verified by an MCP handshake against v0.1.7: identical `tools/list`, `get_contrast_summary`, `check_page_contrast` (AAA) and `check_element_contrast` responses.
+
 ## [0.1.7] — 2026-07-17
 
 ### Fixed

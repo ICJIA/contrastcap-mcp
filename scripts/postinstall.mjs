@@ -12,6 +12,8 @@
 
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
   console.error('[contrastcap] PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 — skipping Chromium install.');
@@ -20,12 +22,23 @@ if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
 
 const require = createRequire(import.meta.url);
 
+// Resolve via each package's package.json (always exported) and take the
+// cli.js beside it. Newer Playwright releases don't list './cli.js' in their
+// "exports" map, so require.resolve('playwright/cli.js') throws
+// ERR_PACKAGE_PATH_NOT_EXPORTED under every package manager, and under pnpm
+// playwright-core isn't resolvable from here at all.
+function cliBeside(pkg) {
+  return join(dirname(require.resolve(`${pkg}/package.json`)), 'cli.js');
+}
+
 let cliPath;
 try {
-  cliPath = require.resolve('playwright/cli.js');
+  cliPath = cliBeside('playwright');
+  if (!existsSync(cliPath)) throw new Error(`${cliPath} not found`);
 } catch {
   try {
-    cliPath = require.resolve('playwright-core/cli.js');
+    cliPath = cliBeside('playwright-core');
+    if (!existsSync(cliPath)) throw new Error(`${cliPath} not found`);
   } catch (err) {
     console.error('[contrastcap] could not resolve Playwright CLI:', err.message);
     console.error('[contrastcap] run `npx playwright install chromium` manually before first audit.');
