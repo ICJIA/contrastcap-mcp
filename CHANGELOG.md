@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] — 2026-11-17
+
+### Changed
+
+- **axe-core `^4.10.0` → `^4.14.1`** (the lockfile had pinned 4.11.2), matching `@icjia/axecap`. Results on the regression page are unchanged: the same counts, ratios and hex suggestions, and identical MCP `tools/list` and tool output.
+
 ## [0.2.0] — 2026-11-17
 
 ### Added

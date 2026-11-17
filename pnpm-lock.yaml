@@ -15,8 +15,8 @@ importers:
         specifier: 2.0.0-alpha.2
         version: 2.0.0-alpha.2(@cfworker/json-schema@4.1.1)
       axe-core:
-        specifier: ^4.10.0
-        version: 4.11.2
+        specifier: ^4.14.1
+        version: 4.14.1
       commander:
         specifier: ^14.0.3
         version: 14.0.3
@@ -200,8 +200,8 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
-  axe-core@4.11.2:
-    resolution: {integrity: sha512-byD6KPdvo72y/wj2T/4zGEvvlis+PsZsn/yPS3pEO+sFpcrqRpX/TJCxvVaEsNeMrfQbCr7w163YqoD9IYwHXw==}
+  axe-core@4.14.1:
+    resolution: {integrity: sha512-FHfa+lmNjQZfJz1q8wKqIDwC6DExcHt/pkjNQb09a3NPjCKg2rhu5qb2S4r76ASyFNNtuFooJpZe37OgudVGtQ==}
     engines: {node: '>=4'}
 
   commander@14.0.3:
@@ -353,7 +353,7 @@ snapshots:
     optionalDependencies:
       '@cfworker/json-schema': 4.1.1
 
-  axe-core@4.11.2: {}
+  axe-core@4.14.1: {}
 
   commander@14.0.3: {}
 
