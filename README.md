@@ -1,10 +1,60 @@
+![contrastcap: WCAG contrast audits that settle axe-core's needs-review items by sampling rendered pixels, as an MCP server or CLI](https://raw.githubusercontent.com/ICJIA/contrastcap-mcp/main/docs/og-image.png)
+
 # @icjia/contrastcap
 
-**MCP server for automated WCAG contrast auditing via pixel-level analysis.**
+[![npm](https://img.shields.io/npm/v/@icjia/contrastcap?color=111&label=npm)](https://www.npmjs.com/package/@icjia/contrastcap)
+[![license: MIT](https://img.shields.io/badge/license-MIT-111)](LICENSE)
+![MCP server + CLI](https://img.shields.io/badge/runs%20as-MCP%20server%20%2B%20CLI-111)
+
+**MCP server and command-line tool for automated WCAG contrast auditing via pixel-level analysis.**
 
 `contrastcap` resolves the "needs review" gap that axe-core and SiteImprove leave behind. When text sits over a complex background (gradient, image, semi-transparent overlay), axe can't determine the rendered contrast ratio from the DOM alone and marks the element `incomplete`. `contrastcap` loads the page in headless Chromium, screenshots the element region with the text hidden, samples actual rendered pixels, and returns a decisive pass / fail / warning with a concrete hex color suggestion for failures.
 
 Built for the same triage workflow as `@icjia/lightcap` and `@icjia/viewcap` — stdio transport, ESM, minimal token footprint, `get_status` tool, `publish.sh`.
+
+**New in 0.2: a full `contrastcap` CLI.** It does everything the MCP server does, so Claude (or any coding agent) can run contrast audits from the shell without the MCP server installed. See [MCP or CLI?](#mcp-or-cli) and [How language models use the CLI](#how-language-models-use-the-cli).
+
+---
+
+## MCP or CLI?
+
+contrastcap runs two ways, and both return **the same JSON** from the same code (`src/tools/*`):
+
+- **MCP server**: Claude calls `get_contrast_summary`, `check_page_contrast`, `check_element_contrast` and `get_status` directly. Registering it means a server process is started for every session, and the client has to load its tool definitions (Claude Code loads them on demand; some clients load every definition up front).
+- **CLI**: Claude (or you) runs `contrastcap summary <url>` through the shell. No server registration and nothing running between audits. It works the same on macOS and Linux, and in any agent that can run shell commands.
+
+You can run both, or uninstall the MCP server and rely on the CLI alone (see [Using the CLI instead of the MCP server](#using-the-cli-instead-of-the-mcp-server)).
+
+### Why the CLI exists
+
+contrastcap started as an MCP server, and that's still a great way to run it. But a registered MCP server has a standing cost, and how big it is depends on the client:
+
+- **Clients that load every tool definition up front** send all four tools, with their schemas and descriptions, to the model in every session, whether or not you check contrast that day.
+- **Claude Code** defers MCP tool definitions: until a tool is needed, the model sees little more than its name. So in Claude Code the token saving from dropping the server is small.
+
+What doesn't depend on the client: a registered server starts a process with every session, and it only works in MCP clients. The CLI has neither cost. It is the same code returning the same JSON, run as a shell command only when an audit is needed, in any agent that has a shell (Claude Code, Codex, Cursor's agent, Aider) or in a script or CI job.
+
+### Feature parity
+
+Everything the MCP server does, the CLI does too, as of v0.2.0.
+
+| Capability | MCP tool / parameter | CLI command / flag |
+|---|---|---|
+| Summary counts (cheapest) | `get_contrast_summary` | `contrastcap summary <url>` |
+| Full page audit with hex fixes | `check_page_contrast` | `contrastcap page <url>` |
+| Single element by selector | `check_element_contrast` | `contrastcap element <url> <selector>` |
+| WCAG level | `level: "AA" \| "AAA"` | `-l, --level AA\|AAA` (all three commands) |
+| Itemize passing elements | `include_passes` (reserved, currently no effect) | not needed until it does something |
+| Versions + update check | `get_status` | `contrastcap status` (or `contrastcap --version`) |
+| Logging | `--verbose` / `--quiet` server args | `--verbose` / `--quiet` (any position) |
+| Environment variables | `CONTRASTCAP_*` (timeouts, viewport, level, limits) | same variables, same effect |
+
+**Known differences** (none affect results):
+
+- **Browser lifetime:** the MCP server keeps Chromium running between calls; the CLI launches it for each command and closes it afterwards, so each CLI call takes about a second longer.
+- **Concurrency:** the MCP server queues up to `CONTRASTCAP_MAX_CONCURRENT` audits per process. Each CLI call is its own process.
+- The CLI writes progress logs (`[contrastcap] ...`) to stderr. Add `--quiet` to keep Claude's Bash output down to the JSON itself.
+- URL validation, SSRF controls (`CONTRASTCAP_BLOCK_PRIVATE`), selector validation, timeouts and error sanitization are shared code, so the two modes enforce exactly the same limits.
 
 ---
 
@@ -207,16 +257,137 @@ Server + axe-core + Playwright versions, plus a non-blocking npm update check.
 
 ## CLI
 
-The package also exposes a CLI for local use without an MCP client:
+### Install the CLI from a clone (macOS + Linux)
 
 ```bash
-npx @icjia/contrastcap summary  https://example.com/about
-npx @icjia/contrastcap page     https://example.com/about --level AAA
-npx @icjia/contrastcap element  http://localhost:3000 'nav a'
-npx @icjia/contrastcap status
+git clone https://github.com/ICJIA/contrastcap-mcp.git
+cd contrastcap-mcp
+./install-cli.sh
+source ~/.zshrc     # or ~/.bashrc, or open a new terminal
 ```
 
-With no subcommand, the binary starts the MCP server on stdio.
+`install-cli.sh` is safe to re-run (after a `git pull`, for example). It:
+
+1. Checks for Node 20+ and installs dependencies with **pnpm** (this repo's package manager; it falls back to npm if pnpm isn't installed), then downloads Playwright's Chromium.
+2. Adds a `contrastcap` alias to `~/.zshrc` (and to `~/.bashrc` if you have one or bash is your login shell). The alias sits between `# >>> contrastcap cli >>>` markers, so re-running replaces it instead of duplicating it.
+3. Symlinks `~/.local/bin/contrastcap` to `src/cli.js`. Aliases only load in interactive shells, so the symlink is what lets **Claude Code's Bash tool**, scripts and cron find `contrastcap`. If `~/.local/bin` isn't on your `PATH`, the script tells you what to add.
+4. Runs a test audit against a tiny page it serves on localhost, to prove the browser launches. On Linux, if Chromium is missing system libraries, it prints the `playwright install-deps` command to run.
+
+To remove the alias and symlink: `./install-cli.sh --uninstall`.
+
+Prefer npm? `npm install -g @icjia/contrastcap` installs the same `contrastcap` command (no alias needed).
+
+### Using the CLI instead of the MCP server
+
+1. Install the CLI (above) and check it: `contrastcap status`.
+2. Remove the MCP server registration:
+
+   ```bash
+   claude mcp remove contrastcap -s user     # or -s project / -s local, wherever you added it
+   ```
+
+3. Tell Claude about the CLI. Add this to `~/.claude/CLAUDE.md` (or a project `CLAUDE.md`):
+
+   ```markdown
+   - For WCAG contrast audits, use the `contrastcap` CLI via Bash (the MCP server is not installed):
+     `contrastcap --quiet summary <url>` first, then `contrastcap --quiet page <url>` for detail,
+     `contrastcap --quiet element <url> <selector>` to verify a fix. Add `--level AAA` when asked.
+     Output is JSON with hex color suggestions for failures.
+   ```
+
+### How language models use the CLI
+
+Once `contrastcap` is on your `PATH` (or aliased), a model uses it exactly the way you would: it runs the command in its shell tool and reads the JSON from stdout. There is nothing to register. The model only needs to know the command exists, which is what the `CLAUDE.md` / `AGENTS.md` note above is for.
+
+A typical session, with the commands the model runs on its own:
+
+```bash
+contrastcap --quiet summary http://localhost:3000                  # how bad is it?
+contrastcap --quiet page http://localhost:3000                     # which elements, which fixes
+contrastcap --quiet element http://localhost:3000 'nav a'          # after editing the CSS
+contrastcap --quiet page http://localhost:3000 --level AAA         # only when AAA is requested
+```
+
+What comes back is the same JSON the MCP tools return. For a failing element:
+
+```json
+{
+  "url": "http://localhost:3000/",
+  "wcag_level": "AA",
+  "selector": "h1",
+  "text": "Low contrast heading",
+  "ratio": 2.85,
+  "required": 3,
+  "pass": false,
+  "fontSize": "32px",
+  "fontWeight": "700",
+  "isLargeText": true,
+  "foreground": "#999999",
+  "background": "#ffffff",
+  "backgroundSource": "pixel-sample",
+  "suggestion": "#949494"
+}
+```
+
+From there the model runs the usual loop: summary → page detail → edit the color → `element` to confirm the fix → summary again.
+
+Tips for agents:
+
+- **Start with `summary`.** It's the cheapest call; only ask for `page` detail when there are failures or warnings.
+- **Use `--quiet`.** It keeps progress logs off stderr, so the model's context only holds the JSON.
+- **Exit codes:** `0` on success, `1` on any error, with a single readable `Error: ...` line.
+- **Other agents:** put the same note in whatever file your agent reads: `AGENTS.md` (Codex and others), `.cursor/rules`, `CONVENTIONS.md` (Aider), and so on.
+
+### Setting up the alias by hand (zsh and bash)
+
+`install-cli.sh` does this for you. To do it yourself, point an alias at `src/cli.js` in your clone. Replace `/path/to/contrastcap-mcp` with the real path.
+
+**zsh** (the default shell on macOS):
+
+```bash
+echo "alias contrastcap='node \"/path/to/contrastcap-mcp/src/cli.js\"'" >> ~/.zshrc
+source ~/.zshrc
+contrastcap --version
+```
+
+**bash** (the usual default on Linux):
+
+```bash
+echo "alias contrastcap='node \"/path/to/contrastcap-mcp/src/cli.js\"'" >> ~/.bashrc
+source ~/.bashrc
+contrastcap --version
+```
+
+On macOS, bash login shells read `~/.bash_profile` rather than `~/.bashrc`. If the alias doesn't appear in a new Terminal window, add `[ -f ~/.bashrc ] && . ~/.bashrc` to `~/.bash_profile`.
+
+**Aliases vs. agents.** Shells only expand aliases in *interactive* sessions. A coding agent's shell tool may run commands non-interactively and never see the alias. That's why `install-cli.sh` also puts a real executable on your `PATH`. To do that by hand:
+
+```bash
+mkdir -p ~/.local/bin
+ln -sf "/path/to/contrastcap-mcp/src/cli.js" ~/.local/bin/contrastcap
+chmod +x "/path/to/contrastcap-mcp/src/cli.js"
+command -v contrastcap    # should print ~/.local/bin/contrastcap
+```
+
+(`~/.local/bin` must be on your `PATH`. Add `export PATH="$HOME/.local/bin:$PATH"` to your `~/.zshrc` or `~/.bashrc` if it isn't.) `npm install -g @icjia/contrastcap` achieves the same thing without a clone.
+
+### Commands
+
+```bash
+contrastcap summary  https://example.com/about                 # counts only (lowest cost)
+contrastcap page     https://example.com/about --level AAA     # failures + warnings with hex fixes
+contrastcap element  http://localhost:3000 'nav a'             # one element
+contrastcap status                                             # versions + npm update check
+contrastcap --version                                          # contrastcap v0.2.0 (axe-core v4.x.x)
+contrastcap --quiet page http://localhost:3000                 # JSON only, no progress logs
+contrastcap --verbose summary http://localhost:3000            # flag position doesn't matter
+```
+
+Without installing anything: `npx @icjia/contrastcap summary <url>`.
+
+The exit code is `1` on any error, so `contrastcap` also works in scripts and CI.
+
+Run with no arguments, `contrastcap` starts the MCP server. MCP clients always launch it that way, with stdin piped. If you type plain `contrastcap` at a terminal, it prints help instead of sitting there waiting for JSON-RPC. The help starts with the contrastcap and axe-core versions, then lists the commands, examples and global flags.
 
 ---
 
@@ -228,8 +399,11 @@ With no subcommand, the binary starts the MCP server on stdio.
 ./publish.sh              # bump patch version and publish (default)
 ./publish.sh minor        # bump minor version and publish
 ./publish.sh major        # bump major version and publish
+./publish.sh patch 123456 # bump + publish with an npm 2FA code (skips the y/N prompt)
 ./publish.sh --dry-run    # dry run only, no publish
 ```
+
+A 2FA code must be 6–8 digits; anything else (such as a misplaced `--dry-run`) stops the script before it changes anything. Every release needs a `CHANGELOG.md` entry for the new version.
 
 First-time publish is auto-detected (no existing version on npm) — the current `package.json` version is used as-is. Subsequent releases bump + tag + push.
 
